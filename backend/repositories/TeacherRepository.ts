@@ -1,0 +1,55 @@
+import { Teacher } from "../models/TeacherModel";
+
+export interface CreateTeacherDTO {
+	name: string;
+	description: string;
+}
+
+export interface UpdateTeacherDTO {
+	name?: string;
+	description?: string;
+	avgRating?: number;
+}
+
+class TeacherRepository {
+	async findAll(): Promise<Teacher[]> {
+		return Teacher.findAll();
+	}
+
+	async findById(id: number): Promise<Teacher | null> {
+		return Teacher.findByPk(id);
+	}
+
+	async findByName(name: string): Promise<Teacher | null> {
+		return Teacher.findOne({ where: { name } });
+	}
+
+	async create(data: CreateTeacherDTO): Promise<Teacher> {
+		return Teacher.create(data);
+	}
+
+	async update(id: number, data: UpdateTeacherDTO): Promise<Teacher | null> {
+		const teacher = await this.findById(id);
+		if (!teacher) return null;
+
+		await teacher.update(data);
+		return teacher;
+	}
+
+	async delete(id: number): Promise<boolean> {
+		const teacher = await this.findById(id);
+		if (!teacher) return false;
+
+		await teacher.destroy();
+		return true;
+	}
+
+	async updateAvgRating(
+		id: number,
+		avgRating: number
+	): Promise<Teacher | null> {
+		return this.update(id, { avgRating });
+	}
+}
+
+export default new TeacherRepository();
