@@ -16,16 +16,13 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-app.use(express.static("dist"));
-
-app.use("/api", router);
-
+app.use(express.static("../frontend/dist"));
 
 app.get("/", (req, res) => {
-	res.send("Welcome to the Teacher Rating API");
+	res.sendFile("index.html", { root: "../frontend/dist" });
 });
 
-
+app.use("/api", router);
 
 // Initialize database and start server
 initDb()
