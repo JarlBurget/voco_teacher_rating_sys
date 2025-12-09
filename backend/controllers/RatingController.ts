@@ -2,11 +2,17 @@ import { Request, Response } from "express";
 import RatingService, { RatingServiceError } from "../services/RatingService";
 
 export const createRating = async (req: Request, res: Response) => {
-	console.log("Received rating data:", req.body); // Log the incoming request body
 	try {
+		console.log("=== createRating called ===");
+		console.log("Received rating data:", req.body);
 		const rating = await RatingService.createRating(req.body);
+		console.log("Rating created successfully:", rating);
 		res.status(201).json(rating);
 	} catch (error: any) {
+		console.error("=== Create rating error ===");
+		console.error("Error type:", error.constructor.name);
+		console.error("Error message:", error.message);
+		console.error("Full error:", error);
 		if (error instanceof RatingServiceError) {
 			if (error.code === "VALIDATION_ERROR")
 				return res.status(400).json({ error: error.message });
@@ -15,7 +21,7 @@ export const createRating = async (req: Request, res: Response) => {
 			if (error.code === "DUPLICATE_RATING")
 				return res.status(409).json({ error: error.message });
 		}
-		res.status(500).json({ error: "Serveri viga" });
+		res.status(500).json({ error: "Serveri viga", details: error.message });
 	}
 };
 

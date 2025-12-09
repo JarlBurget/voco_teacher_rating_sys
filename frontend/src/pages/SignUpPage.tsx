@@ -1,11 +1,14 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
+import { toast } from "sonner";
+import { register } from "../api/auth";
 
 export default function SignUpPage() {
+  const navigate = useNavigate();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
+  const [loading, setLoading] = useState(false);
   const [emailError, setEmailError] = useState("");
 
   const handleEmailChange = (value: string) => {
@@ -18,16 +21,34 @@ export default function SignUpPage() {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (emailError) return; // Do not submit if email is invalid
 
-    console.log("Name:", name);
-    console.log("Email:", email);
-    console.log("Password:", password);
+    setLoading(true);
 
-    // Add your backend sign-up logic here
+    try {
+      console.log("Attempting registration:", { name, email });
+      const result = await register({
+        name: name.trim(),
+        email: email.trim(),
+        password,
+      });
+
+      console.log("Registration successful:", result);
+      toast.success("Registreerimine edukas! Liigute sisselogimise lehele...");
+
+      // Redirect to login page after 1 second
+      setTimeout(() => {
+        navigate("/login");
+      }, 1500);
+    } catch (error) {
+      console.error("Registration error:", error);
+      toast.error(error instanceof Error ? error.message : "Registreerimine ebaõnnestus");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const isFormValid =
@@ -114,15 +135,15 @@ export default function SignUpPage() {
           {/* BUTTON */}
           <button
             type="submit"
-            disabled={!isFormValid}
+            disabled={!isFormValid || loading}
             className={`w-full text-white py-2 rounded-lg font-semibold transition-colors
               ${
-                isFormValid
+                isFormValid && !loading
                   ? "bg-purple-600 hover:bg-purple-700"
                   : "bg-gray-400 cursor-not-allowed"
               }`}
           >
-            Registreeru
+            {loading ? "Registreerin..." : "Registreeru"}
           </button>
         </form>
 

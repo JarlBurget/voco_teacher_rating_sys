@@ -1,5 +1,6 @@
 import { Routes, Route } from "react-router-dom";
 import { useState } from "react";
+import { Toaster } from "sonner";
 import Header from "./components/Header";
 import HomePage from "./pages/HomePage.tsx";
 import TeachersPage from "./pages/TeachersPage.tsx";
@@ -13,6 +14,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen">
+      <Toaster position="top-center" richColors />
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
         <Header darkMode={darkMode} setDarkMode={setDarkMode} />
         <main>

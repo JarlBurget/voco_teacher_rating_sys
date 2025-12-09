@@ -6,7 +6,7 @@ export interface CreateRatingDTO {
 	rating: number;
 	description: string;
 	teacherId: number;
-	userId: number;
+	userId?: number;
 }
 
 export interface UpdateRatingDTO {
@@ -51,7 +51,15 @@ class RatingRepository {
 	}
 
 	async create(data: CreateRatingDTO): Promise<Rating> {
-		return Rating.create(data);
+		try {
+			console.log("RatingRepository.create called with:", data);
+			const result = await Rating.create(data);
+			console.log("Rating created successfully:", result);
+			return result;
+		} catch (error) {
+			console.error("Error creating rating:", error);
+			throw error;
+		}
 	}
 
 	async update(id: number, data: UpdateRatingDTO): Promise<Rating | null> {

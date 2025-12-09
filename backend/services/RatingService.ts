@@ -47,6 +47,7 @@ class RatingService {
 	}
 
 	async createRating(data: CreateRatingDTO): Promise<Rating> {
+		console.log("RatingService.createRating called with:", data);
 		// Valideerimine
 		if (!data.rating || data.rating < 1 || data.rating > 5) {
 			throw new RatingServiceError(
@@ -82,31 +83,35 @@ class RatingService {
 			throw new RatingServiceError("Õpetajat ei leitud", "TEACHER_NOT_FOUND");
 		}
 
-		// Kontrolli, kas kasutaja eksisteerib
-		const user = await UserRepository.findById(data.userId);
-		if (!user) {
-			throw new RatingServiceError("Kasutajat ei leitud", "USER_NOT_FOUND");
-		}
+		// Validate user only if userId is provided
+		if (data.userId) {
+			const user = await UserRepository.findById(data.userId);
+			if (!user) {
+				throw new RatingServiceError("Kasutajat ei leitud", "USER_NOT_FOUND");
+			}
 
-		// Kontrolli, kas kasutaja on juba sellele õpetajale hinnangu andnud
-		const existingRating = await RatingRepository.findByTeacherAndUser(
-			data.teacherId,
-			data.userId
-		);
-		if (existingRating) {
-			throw new RatingServiceError(
-				"Oled juba sellele õpetajale hinnangu andnud",
-				"DUPLICATE_RATING"
+			// Check if user has already rated this teacher
+			const existingRating = await RatingRepository.findByTeacherAndUser(
+				data.teacherId,
+				data.userId
 			);
+			if (existingRating) {
+				throw new RatingServiceError(
+					"Oled juba sellele õpetajale hinnangu andnud",
+					"DUPLICATE_RATING"
+				);
+			}
 		}
 
 		// Loo hinnang
-		const rating = await RatingRepository.create({
+		const createData = {
 			rating: data.rating,
 			description: data.description.trim(),
 			teacherId: data.teacherId,
-			userId: data.userId,
-		});
+			userId: data.userId === undefined ? null : (data.userId || null),
+		};
+		console.log("Creating rating with data:", createData);
+		const rating = await RatingRepository.create(createData);
 
 		// Uuenda õpetaja keskmist hinnangut
 		await this.updateTeacherAvgRating(data.teacherId);

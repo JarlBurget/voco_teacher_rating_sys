@@ -9,8 +9,8 @@ import {
 } from "@heroicons/react/24/outline";
 import { toast } from "sonner";
 
-import { teachers } from "../lib/data";
-import type { Review } from "../lib/types";
+import type { Review, Teacher } from "../lib/types";
+import { createRating, getTeacher } from "../api/ratings";
 
 // Helper: render stars
 const renderStars = (
@@ -43,40 +43,75 @@ const renderStars = (
 };
 
 export default function TeacherProfile() {
-  const { id } = useParams<{ id: string }>();
+	const { id } = useParams<{ id: string }>();
+	const [initialTeacher, setInitialTeacher] = useState<Teacher>({
+		id: "",
+		name: "",
+		role: "",
+		address: "",
+		room: "",
+		unit: "",
+		email: "",
+		phone: "",
+		image: "",
+		avgRating: 0,
+		updatedAt: "",
+		reviews: [],
+	});
+	const [showReviewForm, setShowReviewForm] = useState(false);
 
-  // Find teacher from data.ts and manage in component state
-  const initialTeacher = teachers.find((t) => t.id === id);
-  const [teacher, setTeacher] = useState(initialTeacher);
+	const [reviewForm, setReviewForm] = useState({
+		studentName: "",
+		rating: 5,
+		comment: "",
+		subject: "",
+	});
 
-  // Recalculate average rating whenever teacher data changes
-  const averageRating = useMemo(() => {
-    if (!teacher || teacher.reviews.length === 0) {
-      return 0;
-    }
-    const totalRating = teacher.reviews.reduce((acc, r) => acc + r.rating, 0);
-    return totalRating / teacher.reviews.length;
-  }, [teacher]);
+	useEffect(() => {
+		async function fetchTeacher() {
+			try {
+				const data = await getTeacher(id!);
+				console.log("Fetched teacher data:", data);
 
-  if (!teacher) {
-    return (
-      <div className="text-center text-red-600 dark:text-red-400 mt-20">
-        Teacher not found.
-      </div>
-    );
-  }
+				if (data.reviews === null) {
+					data.reviews = [];
+				}
 
-  const totalReviews = teacher.reviews.length;
+				setInitialTeacher(data);
+			} catch (error) {
+				console.error("Failed to fetch teacher:", error);
+				toast.error("Failed to load teacher");
+			}
+		}
 
-  const [showReviewForm, setShowReviewForm] = useState(false);
-  const [reviewForm, setReviewForm] = useState({
-    studentName: "",
-    rating: 5,
-    comment: "",
-    subject: "",
-  });
+		if (id) {
+			console.log("Fetching teacher with ID:", id);
+			fetchTeacher();
+		}
+	}, [id]);
 
-	const handleSubmitReview = (e: React.FormEvent) => {
+	const averageRating = useMemo(() => {
+		if (!initialTeacher?.reviews || initialTeacher.reviews.length === 0) {
+			return 0;
+		}
+		const totalRating = initialTeacher.reviews.reduce(
+			(acc, r) => acc + r.rating,
+			0
+		);
+		return totalRating / initialTeacher.reviews.length;
+	}, [initialTeacher]);
+
+	if (!initialTeacher || !initialTeacher.id) {
+		return (
+			<div className='text-center text-red-600 dark:text-red-400 mt-20'>
+				Teacher not found.
+			</div>
+		);
+	}
+
+	const totalReviews = initialTeacher.reviews?.length || 0;
+
+	const handleSubmitReview = async (e: React.FormEvent) => {
 		e.preventDefault();
 		console.log("Submitting review:", reviewForm);
 		if (!reviewForm.comment) {
@@ -84,38 +119,30 @@ export default function TeacherProfile() {
 			return;
 		}
 
-		// Create a new review object conforming to the Review type
-		const newReview: Review = {
-			...reviewForm,
-			description: reviewForm.comment,
-			teacherId: initialTeacher.id,
-			userId: "anonymous", // In real app, get from auth context
-			id: Date.now().toString(),
-			createdAt: new Date().toISOString(),
-		};
+		try {
+			// Convert teacherId to number for backend
+			const teacherId = parseInt(initialTeacher.id, 10);
 
-		// Update component state instead of mutating props
-		/* 	const updatedTeacher = {
-			...initialTeacher,
-			reviews: [...initialTeacher.reviews, newReview],
-		};
-		setInitialTeacher(updatedTeacher); */
-
-		fetch(`/api/ratings`, {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify(newReview),
-		})
-			.then(() => {
-				toast.success("Review submitted!");
-				setShowReviewForm(false);
-				setReviewForm({ studentName: "", rating: 5, comment: "", subject: "" });
-			})
-			.catch((error) => {
-				console.error("Failed to submit review:", error);
+			const result = await createRating({
+				rating: reviewForm.rating,
+				description: reviewForm.comment,
+				teacherId: teacherId,
+				// userId omitted for anonymous ratings
 			});
+
+			console.log("Rating created:", result);
+			toast.success("Review submitted!");
+			setShowReviewForm(false);
+			setReviewForm({ studentName: "", rating: 5, comment: "", subject: "" });
+
+			// Refresh the teacher data to show new rating
+			const updatedTeacher = await getTeacher(initialTeacher.id);
+			console.log("Updated teacher:", updatedTeacher);
+			setInitialTeacher(updatedTeacher);
+		} catch (error) {
+			console.error("Failed to submit review:", error);
+			toast.error(error instanceof Error ? error.message : "Failed to submit review");
+		}
 	};
 
 	return (
@@ -205,7 +232,7 @@ export default function TeacherProfile() {
 								<div className='flex items-start justify-between mb-2'>
 									<div>
 										<h4 className='font-semibold text-gray-900 dark:text-white'>
-											{review.studentName}
+											{review.studentName || "Anonüümne"}
 										</h4>
 										{review.subject && (
 											<p className='text-sm text-gray-600 dark:text-gray-300'>
@@ -218,7 +245,7 @@ export default function TeacherProfile() {
 									</div>
 								</div>
 								<p className='text-gray-700 dark:text-gray-300'>
-									{review.comment}
+									{review.comment || review.description}
 								</p>
 								<p className='text-xs text-gray-500 dark:text-gray-400 mt-2'>
 									{new Date(review.createdAt).toLocaleDateString()}
@@ -228,7 +255,7 @@ export default function TeacherProfile() {
 					</div>
 				)}
 			</div>
- */}
+		
 			{/* Add Review Button */}
 			<div className='mb-8'>
 				<button
