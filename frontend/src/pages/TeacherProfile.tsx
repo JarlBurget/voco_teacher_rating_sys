@@ -9,7 +9,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { toast } from "sonner";
 
-import type { Review, Teacher } from "../lib/types";
+import type { Teacher } from "../lib/types";
 import { createRating, getTeacher } from "../api/ratings";
 
 // Helper: render stars
