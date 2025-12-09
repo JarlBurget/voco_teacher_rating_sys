@@ -1,305 +1,273 @@
-import { useParams } from "react-router-dom";
-import { useState, useMemo, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { StarIcon } from "@heroicons/react/24/solid";
-import { StarIcon as StarOutlineIcon } from "@heroicons/react/24/outline";
-import {
-	EnvelopeIcon,
-	MapPinIcon,
-	PhoneIcon,
-} from "@heroicons/react/24/outline";
 import { toast } from "sonner";
-
-import type { Teacher } from "../lib/types";
-import { createRating, getTeacher } from "../api/ratings";
-
-// Helper: render stars
-const renderStars = (
-	rating: number,
-	interactive = false,
-	onRatingChange?: (rating: number) => void
-) => {
-	const stars = [];
-	for (let i = 1; i <= 5; i++) {
-		const isFilled = i <= rating;
-		const StarComponent = isFilled ? StarIcon : StarOutlineIcon;
-
-		stars.push(
-			<button
-				key={i}
-				type={interactive ? "button" : undefined}
-				onClick={interactive ? () => onRatingChange?.(i) : undefined}
-				className={`w-5 h-5 ${
-					interactive
-						? "hover:scale-110 transition-transform cursor-pointer"
-						: ""
-				} ${isFilled ? "text-yellow-400" : "text-gray-300 dark:text-gray-600"}`}
-				disabled={!interactive}
-			>
-				<StarComponent className='w-full h-full' />
-			</button>
-		);
-	}
-	return stars;
-};
+import { createRating, getRatingsByTeacher, getTeacher } from "../api/ratings";
+import type { Rating, Teacher } from "../lib/types";
 
 export default function TeacherProfile() {
 	const { id } = useParams<{ id: string }>();
-	const [initialTeacher, setInitialTeacher] = useState<Teacher>({
-		id: "",
-		name: "",
-		role: "",
-		address: "",
-		room: "",
-		unit: "",
-		email: "",
-		phone: "",
-		image: "",
-		avgRating: 0,
-		updatedAt: "",
-		reviews: [],
-	});
+	const navigate = useNavigate();
+	const [teacher, setTeacher] = useState<Teacher | null>(null);
+	const [ratings, setRatings] = useState<Rating[]>([]);
+	const [loading, setLoading] = useState(true);
+	const [error, setError] = useState<string | null>(null);
 	const [showReviewForm, setShowReviewForm] = useState(false);
-
-	const [reviewForm, setReviewForm] = useState({
-		studentName: "",
-		rating: 5,
-		comment: "",
-		subject: "",
-	});
+	const [submitting, setSubmitting] = useState(false);
+	const [reviewForm, setReviewForm] = useState({ rating: 0, comment: "" });
+	const [user, setUser] = useState<{ id: number; name: string } | null>(null);
 
 	useEffect(() => {
-		async function fetchTeacher() {
+		const storedUser = localStorage.getItem("user");
+		if (storedUser) {
 			try {
-				const data = await getTeacher(id!);
-				console.log("Fetched teacher data:", data);
-
-				if (data.reviews === null) {
-					data.reviews = [];
-				}
-
-				setInitialTeacher(data);
-			} catch (error) {
-				console.error("Failed to fetch teacher:", error);
-				toast.error("Failed to load teacher");
+				const parsed = JSON.parse(storedUser);
+				setUser({ id: parsed.id, name: parsed.name });
+			} catch (parseError) {
+				console.error("Kasutaja lugemine ebaõnnestus:", parseError);
 			}
 		}
+	}, []);
 
-		if (id) {
-			console.log("Fetching teacher with ID:", id);
-			fetchTeacher();
+	useEffect(() => {
+		if (!id) {
+			setError("Õpetaja ID puudub");
+			setLoading(false);
+			return;
 		}
+
+		const loadData = async () => {
+			setLoading(true);
+			setError(null);
+			try {
+				const [teacherData, ratingsData] = await Promise.all([
+					getTeacher(id),
+					getRatingsByTeacher(id),
+				]);
+				setTeacher(teacherData);
+				setRatings(ratingsData);
+			} catch (fetchError: any) {
+				console.error("Õpetaja laadimine ebaõnnestus:", fetchError);
+				setError(fetchError?.message || "Andmete laadimine ebaõnnestus");
+			} finally {
+				setLoading(false);
+			}
+		};
+
+		loadData();
 	}, [id]);
 
 	const averageRating = useMemo(() => {
-		if (!initialTeacher?.reviews || initialTeacher.reviews.length === 0) {
-			return 0;
+		if (ratings.length > 0) {
+			const sum = ratings.reduce((acc, item) => acc + item.rating, 0);
+			return Number((sum / ratings.length).toFixed(2));
 		}
-		const totalRating = initialTeacher.reviews.reduce(
-			(acc, r) => acc + r.rating,
-			0
-		);
-		return totalRating / initialTeacher.reviews.length;
-	}, [initialTeacher]);
+		return Number(teacher?.avgRating ?? 0);
+	}, [ratings, teacher?.avgRating]);
 
-	if (!initialTeacher || !initialTeacher.id) {
+	const renderStars = (value: number, interactive = false, onSelect?: (val: number) => void) => (
+		<div className='flex gap-1'>
+			{[1, 2, 3, 4, 5].map((star) => (
+				<button
+					type='button'
+					key={star}
+					onClick={() => interactive && onSelect?.(star)}
+					className={`${
+						star <= value ? "text-yellow-400" : "text-gray-300 dark:text-gray-600"
+					} ${interactive ? "hover:scale-105 transition-transform" : ""}`}
+					aria-label={`Hinnang ${star} tähte`}
+				>
+					<StarIcon className='w-6 h-6' />
+				</button>
+			))}
+		</div>
+	);
+
+	const handleSubmitReview = async (event: React.FormEvent) => {
+		event.preventDefault();
+		if (!id) {
+			toast.error("Õpetaja ID puudub");
+			return;
+		}
+		if (!user) {
+			toast.error("Palun logi sisse, et hinnangut anda");
+			navigate("/login");
+			return;
+		}
+		if (!reviewForm.rating) {
+			toast.error("Vali hinnang vahemikus 1-5");
+			return;
+		}
+		if (!reviewForm.comment.trim()) {
+			toast.error("Lisa palun lühike kommentaar");
+			return;
+		}
+
+		setSubmitting(true);
+		try {
+			await createRating({
+				rating: reviewForm.rating,
+				description: reviewForm.comment.trim(),
+				teacherId: Number(id),
+				userId: user.id,
+			});
+			toast.success("Hinnang lisatud!");
+			setReviewForm({ rating: 0, comment: "" });
+			setShowReviewForm(false);
+			const [teacherData, ratingsData] = await Promise.all([
+				getTeacher(id),
+				getRatingsByTeacher(id),
+			]);
+			setTeacher(teacherData);
+			setRatings(ratingsData);
+		} catch (submitError: any) {
+			console.error("Hinnangu salvestamine ebaõnnestus:", submitError);
+			toast.error(submitError?.message || "Hinnangu lisamine ebaõnnestus");
+		} finally {
+			setSubmitting(false);
+		}
+	};
+
+	if (loading) {
 		return (
-			<div className='text-center text-red-600 dark:text-red-400 mt-20'>
-				Teacher not found.
+			<div className='max-w-5xl mx-auto px-4 py-12 text-center text-gray-700 dark:text-gray-200'>
+				Laen õpetaja andmeid...
 			</div>
 		);
 	}
 
-	const totalReviews = initialTeacher.reviews?.length || 0;
-
-	const handleSubmitReview = async (e: React.FormEvent) => {
-		e.preventDefault();
-		console.log("Submitting review:", reviewForm);
-		if (!reviewForm.comment) {
-			toast.error("Please fill in all fields");
-			return;
-		}
-
-		try {
-			// Convert teacherId to number for backend
-			const teacherId = parseInt(initialTeacher.id, 10);
-
-			const result = await createRating({
-				rating: reviewForm.rating,
-				description: reviewForm.comment,
-				teacherId: teacherId,
-				// userId omitted for anonymous ratings
-			});
-
-			console.log("Rating created:", result);
-			toast.success("Review submitted!");
-			setShowReviewForm(false);
-			setReviewForm({ studentName: "", rating: 5, comment: "", subject: "" });
-
-			// Refresh the teacher data to show new rating
-			const updatedTeacher = await getTeacher(initialTeacher.id);
-			console.log("Updated teacher:", updatedTeacher);
-			setInitialTeacher(updatedTeacher);
-		} catch (error) {
-			console.error("Failed to submit review:", error);
-			toast.error(error instanceof Error ? error.message : "Failed to submit review");
-		}
-	};
+	if (error || !teacher) {
+		return (
+			<div className='max-w-4xl mx-auto px-4 py-12 text-center'>
+				<p className='text-red-600 dark:text-red-400 font-semibold'>
+					{error || "Õpetajat ei leitud"}
+				</p>
+				<button
+					onClick={() => navigate("/teachers")}
+					className='mt-4 bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700'
+				>
+					Tagasi õpetajate nimekirja
+				</button>
+			</div>
+		);
+	}
 
 	return (
-		<div className='max-w-4xl mx-auto px-4 py-8'>
-			{/* Teacher Info */}
-			<div className='bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 mb-8'>
-				<div className='flex flex-col md:flex-row gap-6'>
-					<div className='w-32 h-32 mx-auto md:mx-0 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700'>
-						{initialTeacher.image ? (
-							<img
-								src={initialTeacher.image}
-								alt={initialTeacher.name}
-								className='w-full h-full object-cover'
-							/>
-						) : (
-							<div className='w-full h-full flex items-center justify-center text-gray-500 text-3xl'>
-								{initialTeacher.name
-									.split(" ")
-									.map((n) => n[0])
-									.join("")}
+		<div className='max-w-5xl mx-auto px-4 py-10'>
+			<div className='bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 flex flex-col gap-6 md:flex-row'>
+				<div className='w-32 h-32 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700 self-start'>
+					{teacher.image ? (
+						<img src={teacher.image} alt={teacher.name} className='w-full h-full object-cover' />
+					) : (
+						<div className='w-full h-full flex items-center justify-center text-gray-500 text-2xl font-semibold'>
+							{teacher.name
+								.split(" ")
+								.map((n) => n[0])
+								.join("")}
+						</div>
+					)}
+				</div>
+
+				<div className='flex-1 space-y-3'>
+					<div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
+						<div>
+							<p className='text-sm text-gray-500 dark:text-gray-400'>{teacher.unit}</p>
+							<h1 className='text-3xl font-bold text-gray-900 dark:text-white'>{teacher.name}</h1>
+							<p className='text-gray-700 dark:text-gray-200'>{teacher.role}</p>
+						</div>
+						<div className='bg-blue-50 dark:bg-blue-900/40 px-4 py-3 rounded-lg text-center'>
+							<div className='flex items-center justify-center gap-2 text-xl font-semibold text-blue-700 dark:text-blue-200'>
+								<StarIcon className='w-6 h-6 text-yellow-400' />
+								<span>{averageRating.toFixed(2)}</span>
 							</div>
-						)}
+							<p className='text-sm text-gray-600 dark:text-gray-300'>Keskmine hinnang</p>
+						</div>
 					</div>
 
-					<div className='flex-1 text-center md:text-left'>
-						<h1 className='text-3xl font-bold text-gray-900 dark:text-white mb-2'>
-							{initialTeacher.name}
-						</h1>
-						<p className='text-lg text-gray-600 dark:text-gray-300 mb-2'>
-							{initialTeacher.role}
-						</p>
-						<p className='text-sm text-gray-500 dark:text-gray-400 mb-4'>
-							{initialTeacher.unit} – {initialTeacher.room}
-						</p>
-
-						{/* Ratings */}
-						<div className='flex items-center justify-center md:justify-start gap-1 mb-4'>
-							{renderStars(averageRating)}
-							<span className='ml-2 text-lg font-semibold text-gray-900 dark:text-white'>
-								{averageRating.toFixed(1)}
-							</span>
-							<span className='text-gray-600 dark:text-gray-300'>
-								({totalReviews} review{totalReviews !== 1 ? "s" : ""})
-							</span>
-						</div>
-
-						{/* Contact */}
-						<div className='space-y-2 text-sm text-gray-600 dark:text-gray-300'>
-							<div className='flex items-center gap-2'>
-								<EnvelopeIcon className='w-4 h-4' />
-								<span>{initialTeacher.email}</span>
-							</div>
-
-							{initialTeacher.phone && (
-								<div className='flex items-center gap-2'>
-									<PhoneIcon className='w-4 h-4' />
-									<span>{initialTeacher.phone}</span>
-								</div>
-							)}
-
-							<div className='flex items-center gap-2'>
-								<MapPinIcon className='w-4 h-4' />
-								<span>{initialTeacher.address}</span>
-							</div>
-						</div>
+					<div className='grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-gray-700 dark:text-gray-200'>
+						{teacher.email && (
+							<p><span className='font-semibold'>Email:</span> {teacher.email}</p>
+						)}
+						{teacher.phone && (
+							<p><span className='font-semibold'>Telefon:</span> {teacher.phone}</p>
+						)}
+						{teacher.address && (
+							<p><span className='font-semibold'>Aadress:</span> {teacher.address}</p>
+						)}
+						{teacher.room && (
+							<p><span className='font-semibold'>Kabinet:</span> {teacher.room}</p>
+						)}
 					</div>
 				</div>
 			</div>
 
-			{/* Reviews */}
-			{/* <div className='bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8'>
-				<h2 className='text-xl font-semibold text-gray-900 dark:text-white mb-6'>
-					Hinnangud ({totalReviews})
-				</h2>
-
-				{initialTeacher?.reviews.length === 0 ? (
-					<p className='text-gray-600 dark:text-gray-300 text-center py-8'>
-						Keegi pole veel hinnanud. Ole esimene!
-					</p>
-				) : (
-					<div className='space-y-6'>
-						{initialTeacher.reviews.map((review) => (
-							<div
-								key={review.id}
-								className='border-b border-gray-200 dark:border-gray-700 pb-6'
-							>
-								<div className='flex items-start justify-between mb-2'>
-									<div>
-										<h4 className='font-semibold text-gray-900 dark:text-white'>
-											{review.studentName || "Anonüümne"}
-										</h4>
-										{review.subject && (
-											<p className='text-sm text-gray-600 dark:text-gray-300'>
-												{review.subject}
-											</p>
-										)}
-									</div>
-									<div className='flex items-center gap-1'>
-										{renderStars(review.rating)}
-									</div>
-								</div>
-								<p className='text-gray-700 dark:text-gray-300'>
-									{review.comment || review.description}
-								</p>
-								<p className='text-xs text-gray-500 dark:text-gray-400 mt-2'>
-									{new Date(review.createdAt).toLocaleDateString()}
-								</p>
-							</div>
-						))}
-					</div>
-				)}
-			</div>
-		
-			{/* Add Review Button */}
-			<div className='mb-8'>
+			<div className='mt-10 flex items-center justify-between'>
+				<h2 className='text-2xl font-bold text-gray-900 dark:text-white'>Hinnangud</h2>
 				<button
 					onClick={() => setShowReviewForm(!showReviewForm)}
-					className='bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700'
+					className='bg-blue-600 text-white px-5 py-2 rounded-lg font-semibold hover:bg-blue-700'
 				>
-					{showReviewForm ? "Tühista" : "Hinda Õpetajat"}
+					{showReviewForm ? "Tühista" : "Hinda õpetajat"}
 				</button>
 			</div>
 
-			{/* Review Form */}
 			{showReviewForm && (
 				<form
 					onSubmit={handleSubmitReview}
-					className='bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-8'
+					className='bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mt-6'
 				>
-					<h2 className='text-xl font-semibold text-gray-900 dark:text-white mb-4'>
-						Kirjuta hinnang
-					</h2>
-
-					<div className='flex gap-1 mb-4'>
-						{renderStars(reviewForm.rating, true, (rating) =>
-							setReviewForm({ ...reviewForm, rating })
+					<h3 className='text-xl font-semibold text-gray-900 dark:text-white mb-4'>Kirjuta hinnang</h3>
+					<div className='flex gap-2 mb-4'>
+						{renderStars(reviewForm.rating, true, (ratingValue) =>
+							setReviewForm((prev) => ({ ...prev, rating: ratingValue }))
 						)}
 					</div>
-
 					<textarea
 						placeholder='Ütle välja, mida sa arvad...'
 						rows={4}
 						value={reviewForm.comment}
-						onChange={(e) =>
-							setReviewForm({ ...reviewForm, comment: e.target.value })
+						onChange={(event) =>
+							setReviewForm((prev) => ({ ...prev, comment: event.target.value }))
 						}
 						className='w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white'
 					/>
-
 					<button
 						type='submit'
-						className='bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700'
+						disabled={submitting}
+						className='mt-3 bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-60'
 					>
-						Esita
+						{submitting ? "Salvestan..." : "Esita"}
 					</button>
 				</form>
 			)}
+
+			<div className='mt-8 space-y-4'>
+				{ratings.length === 0 && (
+					<p className='text-gray-600 dark:text-gray-300'>Sellel õpetajal pole veel hinnanguid.</p>
+				)}
+
+				{ratings.map((rating) => (
+					<div key={rating.id} className='bg-white dark:bg-gray-800 rounded-lg shadow-sm p-5'>
+						<div className='flex items-center justify-between mb-2'>
+							<div className='flex items-center gap-3'>
+								<div className='w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-700 dark:text-blue-200 font-semibold'>
+									{rating.user?.name ? rating.user.name.charAt(0).toUpperCase() : "?"}
+								</div>
+								<div>
+									<p className='text-sm font-semibold text-gray-900 dark:text-white'>
+										{rating.user?.name || "Anonüümne"}
+									</p>
+									<p className='text-xs text-gray-500'>
+										{new Date(rating.createdAt).toLocaleDateString("et-EE")}
+									</p>
+								</div>
+							</div>
+							{renderStars(rating.rating)}
+						</div>
+						<p className='text-gray-700 dark:text-gray-200 whitespace-pre-line'>{rating.description}</p>
+					</div>
+				))}
+			</div>
 		</div>
 	);
 }
