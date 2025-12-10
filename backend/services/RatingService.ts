@@ -27,13 +27,18 @@ class RatingService {
 	}
 
 	async getRatingsByTeacherId(teacherId: number): Promise<Rating[]> {
-		// Kontrolli, kas õpetaja eksisteerib
-		const teacher = await TeacherRepository.findById(teacherId);
-		if (!teacher) {
-			throw new RatingServiceError("Õpetajat ei leitud", "TEACHER_NOT_FOUND");
-		}
+		try {
+			// Kontrolli, kas õpetaja eksisteerib
+			const teacher = await TeacherRepository.findById(teacherId);
+			if (!teacher) {
+				throw new RatingServiceError("Õpetajat ei leitud", "TEACHER_NOT_FOUND");
+			}
 
-		return RatingRepository.findByTeacherId(teacherId);
+			return await RatingRepository.findByTeacherId(teacherId);
+		} catch (error) {
+			console.error("RatingService.getRatingsByTeacherId error:", error);
+			throw error;
+		}
 	}
 
 	async getRatingsByUserId(userId: number): Promise<Rating[]> {

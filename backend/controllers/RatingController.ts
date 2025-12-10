@@ -32,6 +32,7 @@ export const getRatingsByTeacher = async (req: Request, res: Response) => {
 		);
 		res.json(ratings);
 	} catch (error: any) {
+		console.error("Failed to fetch ratings:", error);
 		if (
 			error instanceof RatingServiceError &&
 			error.code === "TEACHER_NOT_FOUND"

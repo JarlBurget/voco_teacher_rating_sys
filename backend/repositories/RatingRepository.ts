@@ -17,21 +17,26 @@ export interface UpdateRatingDTO {
 class RatingRepository {
 	async findAll(): Promise<Rating[]> {
 		return Rating.findAll({
-			include: [Teacher, User],
+			include: [{ association: "Teacher" }, { association: "User" }],
 		});
 	}
 
 	async findById(id: number): Promise<Rating | null> {
 		return Rating.findByPk(id, {
-			include: [Teacher, User],
+			include: [{ association: "Teacher" }, { association: "User" }],
 		});
 	}
 
 	async findByTeacherId(teacherId: number): Promise<Rating[]> {
-		return Rating.findAll({
-			where: { teacherId },
-			include: [User],
-		});
+		try {
+			return await Rating.findAll({
+				where: { teacherId },
+				include: [{ association: "User" }],
+			});
+		} catch (error) {
+			console.error("RatingRepository.findByTeacherId error:", error);
+			throw error;
+		}
 	}
 
 	async findByUserId(userId: number): Promise<Rating[]> {
