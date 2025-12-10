@@ -1,16 +1,45 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Bars3Icon, XMarkIcon } from "@heroicons/react/24/outline";
+import { toast } from "sonner";
 
 interface HeaderProps {
   darkMode: boolean;
   setDarkMode: (darkMode: boolean) => void;
 }
 
+interface User {
+  id: number;
+  name: string;
+  email: string;
+}
+
 export default function Header({}: HeaderProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    // Check if user is logged in
+    const storedUser = localStorage.getItem("user");
+    if (storedUser) {
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch (e) {
+        console.error("Failed to parse user from localStorage:", e);
+      }
+    }
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem("user");
+    localStorage.removeItem("isLoggedIn");
+    setUser(null);
+    setMobileMenuOpen(false);
+    toast.success("Oled välja logitud");
+    navigate("/");
+  };
 
   const navigation = [
     { name: "Avaleht", href: "/" },
@@ -49,20 +78,36 @@ export default function Header({}: HeaderProps) {
 
           {/* Right side buttons */}
           <div className="flex items-center space-x-4">
-            {/* Desktop Log In / Sign Up */}
-            <div className="hidden md:flex space-x-2">
-              <button
-                onClick={() => navigate("/login")}
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-              >
-                Log In
-              </button>
-              <button
-                onClick={() => navigate("/signup")}
-                className="border-2 border-blue-600 text-blue-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-600 hover:text-white transition-colors"
-              >
-                Sign Up
-              </button>
+            {/* Desktop Auth Buttons */}
+            <div className="hidden md:flex space-x-2 items-center">
+              {user ? (
+                <>
+                  <span className="text-sm text-gray-700 dark:text-gray-300">
+                    Tere, {user.name}!
+                  </span>
+                  <button
+                    onClick={handleLogout}
+                    className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition-colors"
+                  >
+                    Logi välja
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => navigate("/login")}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+                  >
+                    Logi sisse
+                  </button>
+                  <button
+                    onClick={() => navigate("/signup")}
+                    className="border-2 border-blue-600 text-blue-600 px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-600 hover:text-white transition-colors"
+                  >
+                    Registreeru
+                  </button>
+                </>
+              )}
             </div>
 
             {/* Mobile menu button */}
@@ -94,25 +139,41 @@ export default function Header({}: HeaderProps) {
                 </Link>
               ))}
 
-              {/* Mobile Log In / Sign Up buttons */}
-              <button
-                onClick={() => {
-                  navigate("/login");
-                  setMobileMenuOpen(false);
-                }}
-                className="w-full bg-blue-600 text-white px-3 py-2 rounded-lg text-base font-medium hover:bg-blue-700 transition-colors"
-              >
-                Log In
-              </button>
-              <button
-                onClick={() => {
-                  navigate("/signup");
-                  setMobileMenuOpen(false);
-                }}
-                className="w-full border-2 border-blue-600 text-blue-600 px-3 py-2 rounded-lg text-base font-medium hover:bg-blue-600 hover:text-white transition-colors"
-              >
-                Sign Up
-              </button>
+              {/* Mobile Auth Buttons */}
+              {user ? (
+                <>
+                  <div className="px-3 py-2 text-base font-medium text-gray-700 dark:text-gray-300 border-t border-gray-200 dark:border-gray-700 mt-4 pt-4">
+                    Tere, {user.name}!
+                  </div>
+                  <button
+                    onClick={handleLogout}
+                    className="w-full bg-red-600 text-white px-3 py-2 rounded-lg text-base font-medium hover:bg-red-700 transition-colors"
+                  >
+                    Logi välja
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => {
+                      navigate("/login");
+                      setMobileMenuOpen(false);
+                    }}
+                    className="w-full bg-blue-600 text-white px-3 py-2 rounded-lg text-base font-medium hover:bg-blue-700 transition-colors"
+                  >
+                    Logi sisse
+                  </button>
+                  <button
+                    onClick={() => {
+                      navigate("/signup");
+                      setMobileMenuOpen(false);
+                    }}
+                    className="w-full border-2 border-blue-600 text-blue-600 px-3 py-2 rounded-lg text-base font-medium hover:bg-blue-600 hover:text-white transition-colors"
+                  >
+                    Registreeru
+                  </button>
+                </>
+              )}
             </div>
           </div>
         )}

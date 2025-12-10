@@ -1,14 +1,51 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
+import { toast } from "sonner";
+import { login } from "../api/auth";
 
 export default function LoginPage() {
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Email:", email);
-    console.log("Password:", password);
+
+    if (!email || !password) {
+      toast.error("Palun sisesta email ja parool");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      console.log("Attempting login:", { email });
+      const result = await login({
+        email: email.trim(),
+        password,
+      });
+
+      console.log("Login successful:", result);
+      
+      // Store user info in localStorage
+      if (result.user) {
+        localStorage.setItem("user", JSON.stringify(result.user));
+        localStorage.setItem("isLoggedIn", "true");
+      }
+
+      toast.success("Sisselogimine edukas!");
+
+      // Redirect to home after 1 second
+      setTimeout(() => {
+        navigate("/");
+      }, 1500);
+    } catch (error) {
+      console.error("Login error:", error);
+      toast.error(error instanceof Error ? error.message : "Sisselogimine ebaõnnestus");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -55,9 +92,10 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            className="w-full bg-purple-600 text-white py-2 rounded-lg font-semibold hover:bg-purple-700 transition-colors"
+            disabled={loading}
+            className="w-full bg-purple-600 text-white py-2 rounded-lg font-semibold hover:bg-purple-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
           >
-            Logi sisse
+            {loading ? "Logime sisse..." : "Logi sisse"}
           </button>
         </form>
 

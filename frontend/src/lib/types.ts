@@ -1,13 +1,15 @@
-export interface Review {
-	id: string;
-	studentName: string;
+export interface Rating {
+	id: number;
 	rating: number;
-	comment: string;
-	subject: string;
+	description: string;
+	teacherId: number;
+	userId: number | null;
 	createdAt: string;
-	description?: string;
-	teacherId?: string;
-	userId?: string;
+	user?: {
+		id: number;
+		name: string;
+		email: string;
+	};
 }
 
 export interface Teacher {
@@ -22,5 +24,5 @@ export interface Teacher {
 	image: string;
 	avgRating: number;
 	updatedAt: string;
-	reviews: Review[];
+	reviews: Rating[];
 }

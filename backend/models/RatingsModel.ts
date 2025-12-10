@@ -38,6 +38,14 @@ Rating.init(
 			type: DataTypes.STRING(400),
 			allowNull: false,
 		},
+		teacherId: {
+			type: DataTypes.INTEGER.UNSIGNED,
+			allowNull: false,
+		},
+		userId: {
+			type: DataTypes.INTEGER.UNSIGNED,
+			allowNull: true,
+		},
 	},
 	{
 		tableName: "ratings",
